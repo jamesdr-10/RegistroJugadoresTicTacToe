@@ -1,4 +1,5 @@
 ﻿@page "/TicTacToe"
+
 @inject IJugadoresApiService jugadoresApiService
 @inject IPartidasApiService partidasApiService
 @inject IMovimientosApiService movimientosApiService
@@ -226,6 +227,9 @@
     private bool esEmpate;
     private bool showModal = false;
 
+    private PeriodicTimer? _refreshTimer;
+    private bool _autoRefreshRunning = false;
+
     private string GameStatus
     {
         get
@@ -266,6 +270,7 @@
         PartidaId = response.Data?.PartidaId ?? 0;
         gameStarted = true;
         miSimbolo = PlayerType.X;
+        StartAutoRefresh();
     }
 
     private async Task JoinGame()
@@ -329,6 +334,7 @@
         }
 
         gameStarted = true;
+        StartAutoRefresh();
         await RefreshGameState();
     }
 
@@ -418,6 +424,7 @@
 
     private void LeaveGame()
     {
+        StopAutoRefresh();
         gameStarted = false;
         PartidaId = 0;
         Jugador1Id = 0;
@@ -438,5 +445,38 @@
     private void HandlePartidaSelected(int partidaId)
     {
         PartidaId = partidaId;
+    }
+
+    private async Task StartAutoRefresh()
+    {
+        if (_autoRefreshRunning)
+            return;
+
+        _autoRefreshRunning = true;
+        _refreshTimer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+
+        try
+        {
+            while (await _refreshTimer.WaitForNextTickAsync() && gameStarted)
+            {
+                await RefreshGameState();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            
+        }
+        finally
+        {
+            _autoRefreshRunning = false;
+        }
+    }
+
+    private void StopAutoRefresh()
+    {
+        _refreshTimer?.Dispose();
+        _refreshTimer = null;
+        _autoRefreshRunning = false;
     }
 }
